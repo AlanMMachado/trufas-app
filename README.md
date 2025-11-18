@@ -1,50 +1,115 @@
-# Welcome to your Expo app 👋
+# Trufas App - Gerenciamento de Vendas
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicativo mobile para gerenciamento de vendas de trufas e sobremesas em ambiente de rua, desenvolvido com React Native e Expo.
 
-## Get started
+## Funcionalidades
 
-1. Install dependencies
+### 📊 Dashboard
+- KPIs financeiros em tempo real (total vendido, pendente, lucro)
+- Progresso de meta diária
+- Lista das últimas 10 vendas
+- Acesso rápido a nova venda e nova remessa
 
-   ```bash
-   npm install
-   ```
+### 📦 Remessas
+- Criação de novas remessas com produtos
+- Visualização de estoque disponível
+- Detalhes de cada remessa com vendas realizadas
+- Status de disponibilidade (Nova/Esgotada/Parcial)
 
-2. Start the app
+### 💰 Vendas
+- Registro rápido de vendas
+- Seleção de produtos disponíveis
+- Controle de status de pagamento (OK/PENDENTE)
+- Método de pagamento opcional
 
-   ```bash
-   npx expo start
-   ```
+### 📈 Relatórios
+- Análise financeira por período (dia/semana/mês)
+- Produtos mais vendidos
+- Total de vendas, pendente e lucro
+- Quantidade de produtos vendidos
 
-In the output, you'll find options to open the app in a
+## Tecnologias Utilizadas
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- **Frontend**: React Native + Expo SDK 50 + TypeScript
+- **Banco de Dados**: SQLite (expo-sqlite)
+- **State Management**: React Context API + useReducer
+- **Navegação**: Expo Router v3
+- **UI Components**: React Native Paper (Material Design)
+- **Date Handling**: date-fns
+- **Storage**: AsyncStorage para configurações
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Instalação
 
-## Get a fresh project
-
-When you're ready, run:
-
+1. Clone o repositório
+2. Instale as dependências:
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+3. Inicie o servidor de desenvolvimento:
+```bash
+npm start
+```
 
-## Learn more
+4. Escaneie o QR code com o app Expo Go no seu dispositivo móvel
 
-To learn more about developing your project with Expo, look at the following resources:
+## Estrutura do Projeto
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```
+src/
+├── app/                    # Telas e navegação
+│   ├── (tabs)/            # Telas principais com navegação por abas
+│   │   ├── dashboard.tsx  # Dashboard com KPIs
+│   │   ├── remessas.tsx   # Listagem de remessas
+│   │   └── relatorios.tsx # Análise de relatórios
+│   ├── vendas/nova.tsx    # Formulário de nova venda
+│   ├── remessas/nova.tsx  # Formulário de nova remessa
+│   └── remessas/[id].tsx  # Detalhes da remessa
+├── components/            # Componentes reutilizáveis
+├── contexts/             # Context API para state management
+├── database/             # Configuração do SQLite
+├── service/              # Serviços de dados
+├── types/                # Tipos TypeScript
+└── constants/            # Constantes e temas
+```
 
-## Join the community
+## Fluxo de Uso
 
-Join our community of developers creating universal apps.
+1. **Início**: O vendedor cria uma nova remessa com os produtos que levará para vender
+2. **Durante as vendas**: Registra cada transação rapidamente na tela de nova venda
+3. **Acompanhamento**: Acompanha o desempenho do dia através do dashboard com KPIs em tempo real
+4. **Final do dia**: Verifica relatórios detalhados e gerencia dívidas pendentes
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Banco de Dados
+
+O aplicativo utiliza SQLite com as seguintes tabelas:
+
+- **remessas**: Controle de remessas/estoque
+- **produtos**: Produtos dentro de cada remessa
+- **vendas**: Registro de vendas realizadas
+- **configuracoes**: Configurações do sistema (metas, custos padrão)
+
+## Personalização
+
+As configurações padrão podem ser ajustadas na tabela `configuracoes`:
+- `meta_diaria_valor`: Meta de vendas diárias em R$ (padrão: 200.00)
+- `meta_diaria_quantidade`: Meta de quantidade vendida (padrão: 50)
+- `custo_padrao_trufa`: Custo padrão por trufa (padrão: 2.50)
+- `custo_padrao_sobremesa`: Custo padrão por sobremesa (padrão: 5.00)
+
+## Desenvolvimento
+
+Para adicionar novas funcionalidades ou fazer ajustes:
+
+1. Os serviços de dados estão em `/service/`
+2. Os tipos TypeScript estão em `/types/`
+3. O estado global está gerenciado em `/contexts/AppContext.tsx`
+4. O banco de dados é inicializado em `/database/db.ts`
+
+## Contribuição
+
+Sinta-se à vontade para contribuir com melhorias, correções de bugs ou novas funcionalidades!
+
+## Licença
+
+Este projeto é desenvolvido para uso comercial e gerenciamento de vendas ambulantes.
