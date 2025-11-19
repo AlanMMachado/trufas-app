@@ -89,23 +89,6 @@ export default function TabLayout() {
         />
 
         <Tabs.Screen
-          name="RelatoriosScreen"
-          options={{
-            title: 'Relatórios',
-            headerShown: false,
-            tabBarLabel: ({ focused, color }) => (
-              <View style={styles.labelContainer}>
-                <Text style={[styles.iconLabel, { color: focused ? color : COLORS.gray }]} allowFontScaling={false}>
-                  Relatórios
-                </Text>
-                <View style={[styles.labelIndicator, { width: focused ? 26 : 0, backgroundColor: focused ? color : 'transparent' }]} />
-              </View>
-            ),
-            tabBarIcon: ({ color, focused }) => <FileIcon color={color} focused={focused} />,
-          }}
-        />
-
-        <Tabs.Screen
           name="RemessasScreen"
           options={{
             title: 'Remessas',
@@ -119,6 +102,23 @@ export default function TabLayout() {
               </View>
             ),
             tabBarIcon: ({ color, focused }) => <PackageIcon color={color} focused={focused} />,
+          }}
+        />
+
+        <Tabs.Screen
+          name="RelatoriosScreen"
+          options={{
+            title: 'Relatórios',
+            headerShown: false,
+            tabBarLabel: ({ focused, color }) => (
+              <View style={styles.labelContainer}>
+                <Text style={[styles.iconLabel, { color: focused ? color : COLORS.gray }]} allowFontScaling={false}>
+                  Relatórios
+                </Text>
+                <View style={[styles.labelIndicator, { width: focused ? 26 : 0, backgroundColor: focused ? color : 'transparent' }]} />
+              </View>
+            ),
+            tabBarIcon: ({ color, focused }) => <FileIcon color={color} focused={focused} />,
           }}
         />
       </Tabs>

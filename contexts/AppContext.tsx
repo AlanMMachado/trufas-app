@@ -13,6 +13,7 @@ interface AppState {
 type AppAction = 
   | { type: 'SET_REMESSA_ATIVA'; payload: Remessa | null }
   | { type: 'ADD_VENDA'; payload: Venda }
+  | { type: 'UPDATE_VENDA'; payload: Venda }
   | { type: 'SET_VENDAS'; payload: Venda[] }
   | { type: 'UPDATE_CONFIG'; payload: { chave: string; valor: any } }
   | { type: 'SET_CONFIGURACOES'; payload: Record<string, any> }
@@ -32,6 +33,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, remessaAtiva: action.payload };
     case 'ADD_VENDA':
       return { ...state, vendas: [action.payload, ...state.vendas] };
+    case 'UPDATE_VENDA':
+      return { 
+        ...state, 
+        vendas: state.vendas.map(v => v.id === action.payload.id ? action.payload : v) 
+      };
     case 'SET_VENDAS':
       return { ...state, vendas: action.payload };
     case 'UPDATE_CONFIG':

@@ -29,7 +29,17 @@ export const RemessaService = {
     },
 
     async getAll(): Promise<Remessa[]> {
-        return await db.getAllAsync<Remessa>(`SELECT * FROM remessas ORDER BY id DESC`);
+        const remessas = await db.getAllAsync<Remessa>(`SELECT * FROM remessas ORDER BY id DESC`);
+        
+        for (const remessa of remessas) {
+            const produtos = await db.getAllAsync<Produto>(
+                `SELECT * FROM produtos WHERE remessa_id = ?`,
+                [remessa.id]
+            );
+            remessa.produtos = produtos;
+        }
+        
+        return remessas;
     },
 
     async getAtivas(): Promise<Remessa[]> {
@@ -66,10 +76,47 @@ export const RemessaService = {
     },
 
     async update(id: number, remessa: Partial<Remessa>): Promise<void> {
+        const updates: string[] = [];
+        const values: any[] = [];
+
+        if (remessa.data !== undefined) {
+            updates.push('data = ?');
+            values.push(remessa.data);
+        }
+        if (remessa.observacao !== undefined) {
+            updates.push('observacao = ?');
+            values.push(remessa.observacao);
+        }
+
+        if (updates.length === 0) return;
+
+        const query = `UPDATE remessas SET ${updates.join(', ')} WHERE id = ?`;
+        values.push(id);
+
+        await db.runAsync(query, values);
+    },
+
+    async updateProduto(id: number, updates: Partial<Produto>): Promise<void> {
         await db.runAsync(
-            `UPDATE remessas SET data = ?, observacao = ? WHERE id = ?`,
-            [remessa.data || '', remessa.observacao || null, id]
+            `UPDATE produtos SET tipo = ?, sabor = ?, quantidade_inicial = ?, custo_producao = ? WHERE id = ?`,
+            [updates.tipo || '', updates.sabor || '', updates.quantidade_inicial || 0, updates.custo_producao || 0, id]
         );
+    },
+
+    async addProduto(remessaId: number, produto: ProdutoCreateParams): Promise<void> {
+        const custoPadrao = produto.tipo === 'trufa' ? 2.50 : 5.00;
+        await db.runAsync(
+            `INSERT INTO produtos (remessa_id, tipo, sabor, quantidade_inicial, custo_producao) VALUES (?, ?, ?, ?, ?)`,
+            [remessaId, produto.tipo, produto.sabor, produto.quantidade_inicial, custoPadrao]
+        );
+    },
+
+    async deleteProduto(id: number): Promise<void> {
+        const vendas = await db.getAllAsync(`SELECT id FROM vendas WHERE produto_id = ?`, [id]);
+        if (vendas.length > 0) {
+            throw new Error('Não é possível excluir produto com vendas associadas');
+        }
+        await db.runAsync(`DELETE FROM produtos WHERE id = ?`, [id]);
     },
 
     async delete(id: number): Promise<void> {

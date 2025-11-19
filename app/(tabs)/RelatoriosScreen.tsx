@@ -1,13 +1,15 @@
+import Header from '@/components/Header';
 import { RelatorioService } from '@/service/relatorioService';
 import { RelatorioResponse } from '@/types/Relatorio';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 
 export default function RelatoriosScreen() {
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<'dia' | 'semana' | 'mes'>('dia');
   const [relatorio, setRelatorio] = useState<RelatorioResponse | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     carregarRelatorio();
@@ -23,6 +25,12 @@ export default function RelatoriosScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await carregarRelatorio();
+    setRefreshing(false);
   };
 
   if (loading) {
@@ -47,14 +55,12 @@ export default function RelatoriosScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <Header title="Relatórios" subtitle="Análise de desempenho" />
+      <ScrollView 
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
       <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Relatórios</Text>
-          <Text style={styles.headerSubtitle}>Análise de desempenho</Text>
-        </View>
-
         {/* Seletor de Período */}
         <View style={styles.periodoContainer}>
           <TouchableOpacity
@@ -159,15 +165,9 @@ export default function RelatoriosScreen() {
           </View>
         )}
 
-        {/* Botão Atualizar */}
-        <TouchableOpacity 
-          style={styles.atualizarButton}
-          onPress={carregarRelatorio}
-        >
-          <Text style={styles.atualizarButtonText}>Atualizar Relatório</Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
+    </View>
   );
 }
 
@@ -202,20 +202,6 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#ffffff',
     fontWeight: 'bold',
-  },
-  header: {
-    marginBottom: 20,
-    paddingTop: 8,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
   },
   periodoContainer: {
     flexDirection: 'row',
@@ -284,7 +270,7 @@ const styles = StyleSheet.create({
   },
   resumoSubtext: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: '#6b7280',
   },
   produtosSection: {
     backgroundColor: '#ffffff',
@@ -304,6 +290,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
+    fontFamily: 'Nunito_600SemiBold',
   },
   badge: {
     backgroundColor: '#dbeafe',
@@ -360,16 +347,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
     color: '#111827',
-  },
-  atualizarButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  atualizarButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: 'bold',
   },
 });

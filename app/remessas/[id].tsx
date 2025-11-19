@@ -1,10 +1,13 @@
+import ConfirmationModal from '@/components/ConfirmationModal';
+import Header from '@/components/Header';
 import { RemessaService } from '@/service/remessaService';
 import { VendaService } from '@/service/vendaService';
 import { Remessa } from '@/types/Remessa';
 import { Venda } from '@/types/Venda';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Edit, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
@@ -15,6 +18,9 @@ export default function DetalhesRemessaScreen() {
   const [loading, setLoading] = useState(true);
   const [remessa, setRemessa] = useState<Remessa | null>(null);
   const [vendas, setVendas] = useState<Venda[]>([]);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteVendaModalVisible, setDeleteVendaModalVisible] = useState(false);
+  const [vendaToDelete, setVendaToDelete] = useState<Venda | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -43,6 +49,34 @@ export default function DetalhesRemessaScreen() {
     }
   };
 
+  const handleDelete = async () => {
+    try {
+      await RemessaService.delete(parseInt(id));
+      router.back();
+    } catch (error) {
+      console.error('Erro ao excluir remessa:', error);
+      // You could show an alert here
+    } finally {
+      setDeleteModalVisible(false);
+    }
+  };
+
+  const handleDeleteVenda = async () => {
+    if (!vendaToDelete) return;
+
+    try {
+      await VendaService.delete(vendaToDelete.id);
+      // Recarregar dados
+      await carregarDetalhes();
+    } catch (error) {
+      console.error('Erro ao excluir venda:', error);
+      alert('Erro ao excluir venda. Tente novamente.');
+    } finally {
+      setDeleteVendaModalVisible(false);
+      setVendaToDelete(null);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -60,6 +94,28 @@ export default function DetalhesRemessaScreen() {
       </View>
     );
   }
+
+  const formatDate = (dateString: string) => {
+    if (!dateString || dateString === 'null' || dateString === '') {
+      return 'Data não informada';
+    }
+    try {
+      return format(new Date(dateString), "dd 'de' MMMM, yyyy", { locale: ptBR });
+    } catch {
+      return 'Data inválida';
+    }
+  };
+
+  const formatDateTime = (dateString: string) => {
+    if (!dateString || dateString === 'null' || dateString === '') {
+      return 'Data não informada';
+    }
+    try {
+      return format(new Date(dateString), 'dd/MM/yyyy HH:mm', { locale: ptBR });
+    } catch {
+      return 'Data inválida';
+    }
+  };
 
   const getTotalVendido = () => {
     if (!remessa.produtos) return 0;
@@ -84,18 +140,24 @@ export default function DetalhesRemessaScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <Header 
+        title="Detalhes da Remessa" 
+        subtitle={formatDate(remessa.data)}
+        actions={
+          <>
+            <TouchableOpacity style={styles.editCardButton} onPress={() => router.push(`/remessas/EditarRemessaScreen?id=${id}`)}>
+              <Edit size={16} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.deleteCardButton} onPress={() => setDeleteModalVisible(true)}>
+              <Trash2 size={16} color="#ffffff" />
+            </TouchableOpacity>
+          </>
+        }
+      />
+
+      <ScrollView>
       <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.headerCard}>
-          <Text style={styles.headerIcon}>📦</Text>
-          <Text style={styles.headerTitle}>
-            {format(parseISO(remessa.data), "dd 'de' MMMM, yyyy", { locale: ptBR })}
-          </Text>
-          {remessa.observacao && (
-            <Text style={styles.headerObservacao}>{remessa.observacao}</Text>
-          )}
-        </View>
 
         {/* KPIs */}
         <View style={styles.kpisGrid}>
@@ -207,7 +269,7 @@ export default function DetalhesRemessaScreen() {
                 <View style={styles.vendaInfo}>
                   <Text style={styles.vendaCliente}>{venda.cliente}</Text>
                   <Text style={styles.vendaData}>
-                    {format(parseISO(venda.data), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                    {formatDateTime(venda.data)}
                   </Text>
                 </View>
                 <View style={styles.vendaValores}>
@@ -224,6 +286,23 @@ export default function DetalhesRemessaScreen() {
                     </Text>
                   </View>
                 </View>
+                <View style={styles.vendaActions}>
+                  <TouchableOpacity 
+                    style={styles.editVendaButton}
+                    onPress={() => router.push(`/vendas/EditarVendaScreen?id=${venda.id}`)}
+                  >
+                    <Edit size={14} color="#2563eb" />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.deleteVendaButton}
+                    onPress={() => {
+                      setVendaToDelete(venda);
+                      setDeleteVendaModalVisible(true);
+                    }}
+                  >
+                    <Trash2 size={14} color="#dc2626" />
+                  </TouchableOpacity>
+                </View>
               </View>
             ))}
             {vendas.length > 10 && (
@@ -235,7 +314,7 @@ export default function DetalhesRemessaScreen() {
         )}
 
         {/* Botão Nova Venda */}
-        <TouchableOpacity 
+                <TouchableOpacity 
           style={styles.novaVendaButton}
           onPress={() => router.push('/vendas/NovaVendaScreen')}
         >
@@ -243,6 +322,28 @@ export default function DetalhesRemessaScreen() {
         </TouchableOpacity>
       </View>
     </ScrollView>
+    
+    <ConfirmationModal
+      visible={deleteModalVisible}
+      title="Excluir Remessa"
+      message="Tem certeza que deseja excluir esta remessa? Esta ação não pode ser desfeita e todos os produtos e vendas associadas serão removidos."
+      onConfirm={handleDelete}
+      onCancel={() => setDeleteModalVisible(false)}
+      confirmText="Excluir"
+    />
+
+    <ConfirmationModal
+      visible={deleteVendaModalVisible}
+      title="Excluir Venda"
+      message={`Tem certeza que deseja excluir a venda de ${vendaToDelete?.cliente}? Esta ação não pode ser desfeita.`}
+      onConfirm={handleDeleteVenda}
+      onCancel={() => {
+        setDeleteVendaModalVisible(false);
+        setVendaToDelete(null);
+      }}
+      confirmText="Excluir"
+    />
+  </View>
   );
 }
 
@@ -473,6 +574,7 @@ const styles = StyleSheet.create({
   },
   vendaValores: {
     alignItems: 'flex-end',
+    marginRight: 12,
   },
   vendaPreco: {
     fontSize: 14,
@@ -501,6 +603,26 @@ const styles = StyleSheet.create({
   statusTextPendente: {
     color: '#6b7280',
   },
+  vendaActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editVendaButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#dbeafe',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteVendaButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   maisVendas: {
     textAlign: 'center',
     color: '#9ca3af',
@@ -518,5 +640,65 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 15,
     fontWeight: 'bold',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  editButton: {
+    backgroundColor: '#dbeafe',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    flex: 1,
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  deleteButton: {
+    backgroundColor: '#fee2e2',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    flex: 1,
+    marginLeft: 8,
+    alignItems: 'center',
+  },
+  deleteButtonText: {
+    color: '#dc2626',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editCardButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteCardButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ef4444',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

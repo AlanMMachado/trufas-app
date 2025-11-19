@@ -3,18 +3,21 @@ import { useApp } from '@/contexts/AppContext';
 import { RemessaService } from '@/service/remessaService';
 import { VendaService } from '@/service/vendaService';
 import { Produto } from '@/types/Remessa';
+import { Venda } from '@/types/Venda';
 import { Picker } from '@react-native-picker/picker';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Switch, Text, TextInput } from 'react-native-paper';
 
-export default function NovaVendaScreen() {
+export default function EditarVendaScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { dispatch } = useApp();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [venda, setVenda] = useState<Venda | null>(null);
   const [formData, setFormData] = useState({
     produto_id: '',
     cliente: '',
@@ -25,26 +28,51 @@ export default function NovaVendaScreen() {
   });
 
   useEffect(() => {
-    carregarProdutos();
-  }, []);
+    if (id) {
+      carregarDados();
+    }
+  }, [id]);
 
-  const carregarProdutos = async () => {
+  const carregarDados = async () => {
     try {
       setLoading(true);
+
+      // Carregar venda
+      const vendaData = await VendaService.getById(parseInt(id));
+      if (!vendaData) {
+        alert('Venda não encontrada');
+        router.back();
+        return;
+      }
+      setVenda(vendaData);
+
+      // Carregar produtos disponíveis
       const remessasAtivas = await RemessaService.getAtivas();
       const todosProdutos: Produto[] = [];
-      
+
       for (const remessa of remessasAtivas) {
         const produtosRemessa = await RemessaService.getProdutosByRemessaId(remessa.id);
-        const produtosDisponiveis = produtosRemessa.filter(p => 
-          p.quantidade_inicial - p.quantidade_vendida > 0
+        const produtosDisponiveis = produtosRemessa.filter(p =>
+          p.quantidade_inicial - p.quantidade_vendida > 0 || p.id === vendaData.produto_id
         );
         todosProdutos.push(...produtosDisponiveis);
       }
-      
+
       setProdutos(todosProdutos);
+
+      // Preencher formulário
+      setFormData({
+        produto_id: vendaData.produto_id.toString(),
+        cliente: vendaData.cliente,
+        quantidade_vendida: vendaData.quantidade_vendida.toString(),
+        preco: (vendaData.preco / vendaData.quantidade_vendida).toFixed(2),
+        status: vendaData.status,
+        metodo_pagamento: vendaData.metodo_pagamento || 'PIX'
+      });
     } catch (error) {
-      console.error('Erro ao carregar produtos:', error);
+      console.error('Erro ao carregar dados:', error);
+      alert('Erro ao carregar dados da venda');
+      router.back();
     } finally {
       setLoading(false);
     }
@@ -63,21 +91,26 @@ export default function NovaVendaScreen() {
 
     try {
       setSaving(true);
-      const venda = await VendaService.create({
+      await VendaService.update(parseInt(id), {
         produto_id: parseInt(formData.produto_id),
         cliente: formData.cliente,
         quantidade_vendida: parseInt(formData.quantidade_vendida),
         preco: parseFloat(formData.preco) * parseInt(formData.quantidade_vendida),
-        data: new Date().toISOString().split('T')[0],
+        data: venda?.data || new Date().toISOString().split('T')[0],
         status: formData.status,
         metodo_pagamento: formData.metodo_pagamento || undefined
       });
 
-      dispatch({ type: 'ADD_VENDA', payload: venda });
+      // Atualizar no contexto
+      const vendaAtualizada = await VendaService.getById(parseInt(id));
+      if (vendaAtualizada) {
+        dispatch({ type: 'UPDATE_VENDA', payload: vendaAtualizada });
+      }
+
       router.back();
     } catch (error) {
-      console.error('Erro ao salvar venda:', error);
-      alert('Erro ao salvar venda. Tente novamente.');
+      console.error('Erro ao atualizar venda:', error);
+      alert('Erro ao atualizar venda. Tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -98,7 +131,7 @@ export default function NovaVendaScreen() {
           <Text style={styles.emptyIcon}>📦</Text>
           <Text style={styles.emptyText}>Nenhum produto disponível</Text>
           <Text style={styles.emptySubtext}>Crie uma remessa com produtos primeiro</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.emptyButton}
             onPress={() => router.push('/remessas/nova')}
           >
@@ -111,7 +144,7 @@ export default function NovaVendaScreen() {
 
   return (
     <View style={styles.container}>
-      <Header title="Nova Venda" subtitle="Registre uma venda rapidamente" />
+      <Header title="Editar Venda" subtitle="Atualize os dados da venda" />
       <ScrollView>
       <View style={styles.content}>
 
@@ -119,7 +152,7 @@ export default function NovaVendaScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Produto *</Text>
           <Text style={styles.sectionSubtitle}>Selecione o produto vendido</Text>
-          
+
           <View style={styles.produtosGrid}>
             {produtos.map((produto) => (
               <TouchableOpacity
@@ -150,7 +183,7 @@ export default function NovaVendaScreen() {
         {/* Informações */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Informações da Venda</Text>
-          
+
           {/* Cliente */}
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Cliente *</Text>
@@ -182,7 +215,7 @@ export default function NovaVendaScreen() {
             </View>
 
             <View style={styles.halfInput}>
-              <Text style={styles.label}>Preço (R$) *</Text>
+              <Text style={styles.label}>Preço Unitário (R$) *</Text>
               <TextInput
                 value={formData.preco}
                 onChangeText={(text) => setFormData({ ...formData, preco: text })}
@@ -225,9 +258,9 @@ export default function NovaVendaScreen() {
             </View>
             <Switch
               value={formData.status === 'OK'}
-              onValueChange={(value) => setFormData({ 
-                ...formData, 
-                status: value ? 'OK' : 'PENDENTE' 
+              onValueChange={(value) => setFormData({
+                ...formData,
+                status: value ? 'OK' : 'PENDENTE'
               })}
               color="#2563eb"
             />
@@ -281,7 +314,7 @@ export default function NovaVendaScreen() {
 
         {/* Botões de Ação */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.cancelButton}
             onPress={() => router.back()}
             disabled={saving}
@@ -289,7 +322,7 @@ export default function NovaVendaScreen() {
             <Text style={styles.cancelButtonText}>Cancelar</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.submitButton, saving && styles.submitButtonDisabled]}
             onPress={handleSubmit}
             disabled={saving}
@@ -297,7 +330,7 @@ export default function NovaVendaScreen() {
             {saving ? (
               <ActivityIndicator color="#ffffff" size={20} />
             ) : (
-              <Text style={styles.submitButtonText}>Confirmar Venda</Text>
+              <Text style={styles.submitButtonText}>Atualizar Venda</Text>
             )}
           </TouchableOpacity>
         </View>

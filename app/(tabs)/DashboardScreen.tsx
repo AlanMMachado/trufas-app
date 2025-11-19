@@ -1,11 +1,14 @@
+import Header from '@/components/Header';
 import { useApp } from '@/contexts/AppContext';
+import { ProdutoService } from '@/service/produtoService';
 import { RelatorioService } from '@/service/relatorioService';
 import { VendaService } from '@/service/vendaService';
+import { Produto } from '@/types/Produto';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 
 export default function DashboardScreen() {
@@ -18,6 +21,8 @@ export default function DashboardScreen() {
     totalLucro: 0,
     progressoMeta: 0
   });
+  const [produtos, setProdutos] = useState<Record<number, Produto>>({});
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -30,6 +35,17 @@ export default function DashboardScreen() {
       
       const vendasRecentes = await VendaService.getVendasRecentes(10);
       dispatch({ type: 'SET_VENDAS', payload: vendasRecentes });
+      
+      // Buscar produtos para as vendas
+      const produtoIds = [...new Set(vendasRecentes.map(v => v.produto_id))];
+      const produtosMap: Record<number, Produto> = {};
+      for (const id of produtoIds) {
+        const produto = await ProdutoService.getById(id);
+        if (produto) {
+          produtosMap[id] = produto;
+        }
+      }
+      setProdutos(produtosMap);
       
       const relatorio = await RelatorioService.gerarRelatorio({ 
         periodo: 'dia',
@@ -53,6 +69,12 @@ export default function DashboardScreen() {
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await carregarDados();
+    setRefreshing(false);
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -62,16 +84,15 @@ export default function DashboardScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <Header 
+        title="Dashboard" 
+        subtitle={format(new Date(), "dd 'de' MMMM", { locale: ptBR })}
+      />
+      <ScrollView 
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
       <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Dashboard</Text>
-          <Text style={styles.headerDate}>
-            {format(new Date(), "dd 'de' MMMM", { locale: ptBR })}
-          </Text>
-        </View>
-
         {/* KPIs */}
         <View style={styles.kpiContainer}>
           <View style={styles.kpiCard}>
@@ -165,6 +186,11 @@ export default function DashboardScreen() {
                 <View key={venda.id} style={styles.vendaItem}>
                   <View style={styles.vendaInfo}>
                     <Text style={styles.vendaCliente}>{venda.cliente || 'Cliente'}</Text>
+                    {produtos[venda.produto_id] && (
+                      <Text style={styles.vendaProduto}>
+                        • {produtos[venda.produto_id].tipo} {produtos[venda.produto_id].sabor} - <Text style={{color: '#2563eb', fontWeight: 'bold'}}>{venda.quantidade_vendida}</Text> un
+                      </Text>
+                    )}
                     <Text style={styles.vendaData}>
                       {format(parseISO(venda.data), 'HH:mm', { locale: ptBR })}
                     </Text>
@@ -190,6 +216,7 @@ export default function DashboardScreen() {
         </View>
       </View>
     </ScrollView>
+    </View>
   );
 }
 
@@ -203,21 +230,6 @@ const styles = StyleSheet.create({
   },
   loading: {
     marginTop: 50,
-  },
-  header: {
-    marginBottom: 24,
-    paddingTop: 8,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  headerDate: {
-    fontSize: 14,
-    color: '#6b7280',
-    textTransform: 'capitalize',
   },
   kpiContainer: {
     flexDirection: 'row',
@@ -258,7 +270,7 @@ const styles = StyleSheet.create({
   },
   kpiSubtext: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: '#6b7280',
   },
   metaCard: {
     backgroundColor: '#ffffff',
@@ -355,6 +367,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
+    fontFamily: 'Nunito_600SemiBold',
   },
   badge: {
     backgroundColor: '#dbeafe',
@@ -401,11 +414,17 @@ const styles = StyleSheet.create({
   },
   vendaInfo: {
     flex: 1,
+    flexDirection: 'column',
   },
   vendaCliente: {
     fontSize: 14,
     fontWeight: '600',
     color: '#111827',
+    marginBottom: 2,
+  },
+  vendaProduto: {
+    fontSize: 12,
+    color: '#6b7280',
     marginBottom: 2,
   },
   vendaData: {

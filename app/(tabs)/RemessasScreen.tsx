@@ -1,16 +1,22 @@
+import ConfirmationModal from '@/components/ConfirmationModal';
+import Header from '@/components/Header';
 import { RemessaService } from '@/service/remessaService';
 import { Remessa } from '@/types/Remessa';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useRouter } from 'expo-router';
+import { Edit, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 
 export default function RemessasScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [remessas, setRemessas] = useState<Remessa[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [selectedRemessaId, setSelectedRemessaId] = useState<number | null>(null);
 
   useEffect(() => {
     carregarRemessas();
@@ -25,6 +31,26 @@ export default function RemessasScreen() {
       console.error('Erro ao carregar remessas:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await carregarRemessas();
+    setRefreshing(false);
+  };
+
+  const handleDelete = async () => {
+    if (selectedRemessaId) {
+      try {
+        await RemessaService.delete(selectedRemessaId);
+        await carregarRemessas(); // reload list
+      } catch (error) {
+        console.error('Erro ao excluir remessa:', error);
+      } finally {
+        setDeleteModalVisible(false);
+        setSelectedRemessaId(null);
+      }
     }
   };
 
@@ -49,6 +75,17 @@ export default function RemessasScreen() {
     return totalInicial > 0 ? (totalVendido / totalInicial) * 100 : 0;
   };
 
+  const formatDate = (dateString: string) => {
+    if (!dateString || dateString === 'null' || dateString === '') {
+      return 'Data não informada';
+    }
+    try {
+      return format(new Date(dateString), 'dd/MM/yyyy', { locale: ptBR });
+    } catch {
+      return 'Data inválida';
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -59,14 +96,15 @@ export default function RemessasScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Remessas</Text>
-        <Text style={styles.headerSubtitle}>
-          {remessas.length} {remessas.length === 1 ? 'remessa' : 'remessas'}
-        </Text>
-      </View>
+      <Header 
+        title="Remessas" 
+        subtitle={`${remessas.length} ${remessas.length === 1 ? 'remessa' : 'remessas'}`}
+      />
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         {remessas.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>📦</Text>
@@ -94,11 +132,13 @@ export default function RemessasScreen() {
                   <View style={styles.remessaDateContainer}>
                     <Text style={styles.remessaDateLabel}>Data</Text>
                     <Text style={styles.remessaData}>
-                      {format(parseISO(remessa.data), 'dd/MM/yyyy', { locale: ptBR })}
+                      {formatDate(remessa.data)}
                     </Text>
                   </View>
                   <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>{getStatusRemessa(remessa)}</Text>
+                    <Text style={styles.statusText}>
+                      {remessa.produtos ? remessa.produtos.length : 0} produtos
+                    </Text>
                   </View>
                 </View>
 
@@ -129,18 +169,10 @@ export default function RemessasScreen() {
                 {/* Produtos */}
                 {remessa.produtos && remessa.produtos.length > 0 && (
                   <View style={styles.produtosContainer}>
-                    <Text style={styles.produtosTitle}>
-                      Produtos ({remessa.produtos.length})
-                    </Text>
                     {remessa.produtos.slice(0, 3).map((produto) => (
-                      <View key={produto.id} style={styles.produtoItem}>
-                        <Text style={styles.produtoNome}>
-                          {produto.tipo} - {produto.sabor}
-                        </Text>
-                        <Text style={styles.produtoQuantidade}>
-                          {produto.quantidade_inicial - produto.quantidade_vendida}/{produto.quantidade_inicial}
-                        </Text>
-                      </View>
+                      <Text key={produto.id} style={styles.produtoBullet}>
+                        • {produto.tipo} {produto.sabor} - {produto.quantidade_inicial} un
+                      </Text>
                     ))}
                     {remessa.produtos.length > 3 && (
                       <Text style={styles.maisItens}>
@@ -153,6 +185,23 @@ export default function RemessasScreen() {
                 {/* Footer */}
                 <View style={styles.remessaFooter}>
                   <Text style={styles.verDetalhes}>Ver detalhes →</Text>
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity 
+                      style={styles.editCardButton} 
+                      onPress={() => router.push(`/remessas/EditarRemessaScreen?id=${remessa.id}`)}
+                    >
+                      <Edit size={16} color="#2563eb" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.deleteCardButton} 
+                      onPress={() => {
+                        setSelectedRemessaId(remessa.id);
+                        setDeleteModalVisible(true);
+                      }}
+                    >
+                      <Trash2 size={16} color="#dc2626" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </TouchableOpacity>
@@ -166,6 +215,18 @@ export default function RemessasScreen() {
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
+
+      <ConfirmationModal
+        visible={deleteModalVisible}
+        title="Excluir Remessa"
+        message="Tem certeza que deseja excluir esta remessa? Esta ação não pode ser desfeita."
+        onConfirm={handleDelete}
+        onCancel={() => {
+          setDeleteModalVisible(false);
+          setSelectedRemessaId(null);
+        }}
+        confirmText="Excluir"
+      />
     </View>
   );
 }
@@ -175,24 +236,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f9fafb',
   },
-  header: {
-    padding: 16,
-    paddingTop: 24,
-    paddingBottom: 12,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
   content: {
     flex: 1,
     paddingHorizontal: 16,
+    paddingTop: 16,
   },
   loading: {
     marginTop: 50,
@@ -203,7 +250,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#e5e7eb',
     padding: 40,
-    marginTop: 50,
     alignItems: 'center',
   },
   emptyIcon: {
@@ -340,6 +386,12 @@ const styles = StyleSheet.create({
     color: '#374151',
     fontWeight: '500',
   },
+  produtoBullet: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
   produtoQuantidade: {
     fontSize: 13,
     color: '#6b7280',
@@ -347,17 +399,39 @@ const styles = StyleSheet.create({
   },
   maisItens: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: '#6b7280',
     fontStyle: 'italic',
     marginTop: 4,
   },
   remessaFooter: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   verDetalhes: {
     fontSize: 13,
     fontWeight: 'bold',
     color: '#2563eb',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editCardButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#dbeafe',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  deleteCardButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   fab: {
     position: 'absolute',

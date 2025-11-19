@@ -1,29 +1,61 @@
 import Header from '@/components/Header';
-import { useApp } from '@/contexts/AppContext';
 import { RemessaService } from '@/service/remessaService';
-import { RemessaCreateParams } from '@/types/Remessa';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ActivityIndicator, Text, TextInput } from 'react-native-paper';
 
 interface ProdutoForm {
+  id: number;
   tipo: string;
   sabor: string;
   quantidade_inicial: string;
 }
 
-export default function NovaRemessaScreen() {
+export default function EditarRemessaScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { dispatch } = useApp();
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [observacao, setObservacao] = useState('');
-  const [produtos, setProdutos] = useState<ProdutoForm[]>([
-    { tipo: '', sabor: '', quantidade_inicial: '' }
-  ]);
+  const [produtos, setProdutos] = useState<ProdutoForm[]>([]);
+  const [produtosOriginais, setProdutosOriginais] = useState<ProdutoForm[]>([]);
+
+  useEffect(() => {
+    if (id) {
+      carregarRemessa();
+    }
+  }, [id]);
+
+  const carregarRemessa = async () => {
+    try {
+      setLoading(true);
+      const remessa = await RemessaService.getById(parseInt(id));
+      if (remessa) {
+        setObservacao(remessa.observacao || '');
+        const produtosMapeados = remessa.produtos?.map(p => ({
+          id: p.id,
+          tipo: p.tipo,
+          sabor: p.sabor,
+          quantidade_inicial: p.quantidade_inicial.toString()
+        })) || [];
+        setProdutos(produtosMapeados);
+        setProdutosOriginais(JSON.parse(JSON.stringify(produtosMapeados))); // Deep copy
+      }
+    } catch (error) {
+      console.error('Erro ao carregar remessa:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const adicionarProduto = () => {
-    setProdutos([...produtos, { tipo: '', sabor: '', quantidade_inicial: '' }]);
+    setProdutos([...produtos, { 
+      id: 0, // ID temporário
+      tipo: '', 
+      sabor: '', 
+      quantidade_inicial: '' 
+    }]);
   };
 
   const removerProduto = (index: number) => {
@@ -32,7 +64,7 @@ export default function NovaRemessaScreen() {
     }
   };
 
-  const atualizarProduto = (index: number, campo: keyof ProdutoForm, valor: string) => {
+  const atualizarProduto = (index: number, campo: 'tipo' | 'sabor' | 'quantidade_inicial', valor: string) => {
     const novosProdutos = [...produtos];
     novosProdutos[index][campo] = valor;
     setProdutos(novosProdutos);
@@ -51,17 +83,40 @@ export default function NovaRemessaScreen() {
     try {
       setSaving(true);
       
-      const remessaData: RemessaCreateParams = {
-        data: new Date().toISOString().split('T')[0],
-        observacao: observacao.trim() || undefined,
-        produtos: produtosValidos.map(p => ({
-          tipo: p.tipo.trim(),
-          sabor: p.sabor.trim(),
-          quantidade_inicial: parseInt(p.quantidade_inicial)
-        }))
-      };
+      // Update remessa
+      await RemessaService.update(parseInt(id), {
+        observacao: observacao.trim() || undefined
+      });
 
-      await RemessaService.create(remessaData);
+      // Delete removed products
+      const produtosAtuaisIds = produtosValidos.map(p => p.id).filter(id => id && id > 0);
+      const produtosParaDeletar = produtosOriginais.filter(p => p.id && p.id > 0 && !produtosAtuaisIds.includes(p.id));
+      
+      for (const produto of produtosParaDeletar) {
+        if (produto.id && produto.id > 0) {
+          await RemessaService.deleteProduto(produto.id);
+        }
+      }
+
+      // Update products
+      for (const produto of produtosValidos) {
+        if (produto.id && produto.id > 0) {
+          // Update existing product
+          await RemessaService.updateProduto(produto.id, {
+            tipo: produto.tipo.trim(),
+            sabor: produto.sabor.trim(),
+            quantidade_inicial: parseInt(produto.quantidade_inicial)
+          });
+        } else {
+          // Add new product
+          await RemessaService.addProduto(parseInt(id), {
+            tipo: produto.tipo.trim(),
+            sabor: produto.sabor.trim(),
+            quantidade_inicial: parseInt(produto.quantidade_inicial)
+          });
+        }
+      }
+
       router.back();
     } catch (error) {
       console.error('Erro ao salvar remessa:', error);
@@ -71,9 +126,17 @@ export default function NovaRemessaScreen() {
     }
   };
 
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#2563eb" style={styles.loading} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Header title="Nova Remessa" subtitle="Registre uma nova entrada de produtos" />
+      <Header title="Editar Remessa" subtitle="Atualize os dados da remessa" />
       <ScrollView>
       <View style={styles.content}>
 
@@ -87,7 +150,7 @@ export default function NovaRemessaScreen() {
           </View>
 
           {produtos.map((produto, index) => (
-            <View key={index} style={styles.produtoCard}>
+            <View key={produto.id || index} style={styles.produtoCard}>
               {produtos.length > 1 && (
                 <TouchableOpacity 
                   onPress={() => removerProduto(index)}
@@ -207,7 +270,7 @@ export default function NovaRemessaScreen() {
             {saving ? (
               <ActivityIndicator color="#ffffff" size={20} />
             ) : (
-              <Text style={styles.submitButtonText}>Criar Remessa</Text>
+              <Text style={styles.submitButtonText}>Salvar Alterações</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -225,19 +288,8 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
-  header: {
-    marginBottom: 20,
-    paddingTop: 8,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
+  loading: {
+    marginTop: 50,
   },
   section: {
     marginBottom: 20,
@@ -285,29 +337,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     position: 'relative',
   },
-  produtoHeader: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  removeButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  removeButtonText: {
-    color: '#6b7280',
-    fontSize: 24,
-    fontWeight: '300',
-  },
   inputContainer: {
     marginBottom: 16,
   },
@@ -338,6 +367,23 @@ const styles = StyleSheet.create({
   },
   tipoButtonTextActive: {
     color: '#ffffff',
+  },
+  removeButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  removeButtonText: {
+    color: '#6b7280',
+    fontSize: 24,
+    fontWeight: '300',
   },
   addButton: {
     backgroundColor: '#ffffff',

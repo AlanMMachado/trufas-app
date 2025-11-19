@@ -54,6 +54,65 @@ export const VendaService = {
         );
     },
 
+    async update(id: number, venda: Partial<VendaCreateParams>): Promise<void> {
+        const fields = [];
+        const values = [];
+        
+        if (venda.produto_id !== undefined) {
+            fields.push('produto_id = ?');
+            values.push(venda.produto_id);
+        }
+        if (venda.cliente !== undefined) {
+            fields.push('cliente = ?');
+            values.push(venda.cliente);
+        }
+        if (venda.quantidade_vendida !== undefined) {
+            fields.push('quantidade_vendida = ?');
+            values.push(venda.quantidade_vendida);
+        }
+        if (venda.preco !== undefined) {
+            fields.push('preco = ?');
+            values.push(venda.preco);
+        }
+        if (venda.data !== undefined) {
+            fields.push('data = ?');
+            values.push(venda.data);
+        }
+        if (venda.status !== undefined) {
+            fields.push('status = ?');
+            values.push(venda.status);
+        }
+        if (venda.metodo_pagamento !== undefined) {
+            fields.push('metodo_pagamento = ?');
+            values.push(venda.metodo_pagamento);
+        }
+        
+        if (fields.length === 0) return;
+        
+        values.push(id);
+        
+        await db.runAsync(
+            `UPDATE vendas SET ${fields.join(', ')} WHERE id = ?`,
+            values
+        );
+        
+        // Se quantidade_vendida mudou, ajustar no produto
+        if (venda.quantidade_vendida !== undefined) {
+            const vendaAtual = await this.getById(id);
+            if (vendaAtual) {
+                const diferenca = venda.quantidade_vendida - vendaAtual.quantidade_vendida;
+                if (diferenca !== 0) {
+                    await db.runAsync(
+                        `UPDATE produtos 
+                         SET quantidade_vendida = quantidade_vendida + ?
+                         WHERE id = ?`,
+                        [diferenca, vendaAtual.produto_id]
+                    );
+                }
+            }
+        }
+    },
+
     async getByPeriodo(inicio: string, fim: string): Promise<Venda[]> {
         return await db.getAllAsync<Venda>(
             `SELECT * FROM vendas WHERE data BETWEEN ? AND ? ORDER BY data DESC`,
