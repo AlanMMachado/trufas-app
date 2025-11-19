@@ -1,0 +1,445 @@
+import { useApp } from '@/contexts/AppContext';
+import { RelatorioService } from '@/service/relatorioService';
+import { VendaService } from '@/service/vendaService';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text } from 'react-native-paper';
+
+export default function DashboardScreen() {
+  const { state, dispatch } = useApp();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [kpis, setKpis] = useState({
+    totalVendido: 0,
+    totalPendente: 0,
+    totalLucro: 0,
+    progressoMeta: 0
+  });
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      const hoje = new Date().toISOString().split('T')[0];
+      
+      const vendasRecentes = await VendaService.getVendasRecentes(10);
+      dispatch({ type: 'SET_VENDAS', payload: vendasRecentes });
+      
+      const relatorio = await RelatorioService.gerarRelatorio({ 
+        periodo: 'dia',
+        data_inicio: hoje,
+        data_fim: hoje
+      });
+      
+      const metaDiariaValor = 200;
+      
+      setKpis({
+        totalVendido: relatorio.total_vendido,
+        totalPendente: relatorio.total_pendente,
+        totalLucro: relatorio.total_lucro,
+        progressoMeta: Math.min((relatorio.total_vendido / metaDiariaValor) * 100, 100)
+      });
+      
+    } catch (error) {
+      console.error('Erro ao carregar dados do dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#2563eb" style={styles.loading} />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.container}>
+      <View style={styles.content}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Dashboard</Text>
+          <Text style={styles.headerDate}>
+            {format(new Date(), "dd 'de' MMMM", { locale: ptBR })}
+          </Text>
+        </View>
+
+        {/* KPIs */}
+        <View style={styles.kpiContainer}>
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiIconContainer}>
+              <Text style={styles.kpiIcon}>💰</Text>
+            </View>
+            <Text style={styles.kpiLabel}>Total Vendido</Text>
+            <Text style={styles.kpiValue}>R$ {kpis.totalVendido.toFixed(2)}</Text>
+            <Text style={styles.kpiSubtext}>
+              {state.vendas.filter(v => v.status === 'OK').length} vendas
+            </Text>
+          </View>
+          
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiIconContainer}>
+              <Text style={styles.kpiIcon}>⏱️</Text>
+            </View>
+            <Text style={styles.kpiLabel}>Pendente</Text>
+            <Text style={styles.kpiValue}>R$ {kpis.totalPendente.toFixed(2)}</Text>
+            <Text style={styles.kpiSubtext}>
+              {state.vendas.filter(v => v.status === 'PENDENTE').length} vendas
+            </Text>
+          </View>
+          
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiIconContainer}>
+              <Text style={styles.kpiIcon}>📈</Text>
+            </View>
+            <Text style={styles.kpiLabel}>Lucro</Text>
+            <Text style={styles.kpiValue}>R$ {kpis.totalLucro.toFixed(2)}</Text>
+            <Text style={styles.kpiSubtext}>
+              {kpis.totalVendido > 0 ? ((kpis.totalLucro / kpis.totalVendido) * 100).toFixed(0) : 0}% margem
+            </Text>
+          </View>
+        </View>
+
+        {/* Meta Diária */}
+        <View style={styles.metaCard}>
+          <View style={styles.metaHeader}>
+            <Text style={styles.metaTitle}>Meta Diária</Text>
+            <Text style={styles.metaPercentage}>{kpis.progressoMeta.toFixed(0)}%</Text>
+          </View>
+          
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressFill, { width: `${kpis.progressoMeta}%` }]} />
+          </View>
+          
+          <View style={styles.metaFooter}>
+            <Text style={styles.metaText}>R$ {kpis.totalVendido.toFixed(2)} de R$ 200,00</Text>
+            <Text style={styles.metaText}>Faltam R$ {(200 - kpis.totalVendido).toFixed(2)}</Text>
+          </View>
+        </View>
+
+        {/* Ações Rápidas */}
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity 
+            style={styles.primaryButton}
+            onPress={() => router.push('/vendas/NovaVendaScreen')}
+          >
+            <Text style={styles.primaryButtonText}>+ Nova Venda</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={styles.secondaryButton}
+            onPress={() => router.push('/remessas/NovaRemessaScreen')}
+          >
+            <Text style={styles.secondaryButtonText}>+ Nova Remessa</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Vendas Recentes */}
+        <View style={styles.vendasSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Vendas Recentes</Text>
+            {state.vendas.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{state.vendas.length}</Text>
+              </View>
+            )}
+          </View>
+
+          {state.vendas.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>📝</Text>
+              <Text style={styles.emptyText}>Nenhuma venda hoje</Text>
+              <Text style={styles.emptySubtext}>Registre sua primeira venda</Text>
+            </View>
+          ) : (
+            <View style={styles.vendasList}>
+              {state.vendas.map((venda) => (
+                <View key={venda.id} style={styles.vendaItem}>
+                  <View style={styles.vendaInfo}>
+                    <Text style={styles.vendaCliente}>{venda.cliente || 'Cliente'}</Text>
+                    <Text style={styles.vendaData}>
+                      {format(parseISO(venda.data), 'HH:mm', { locale: ptBR })}
+                    </Text>
+                  </View>
+                  <View style={styles.vendaValores}>
+                    <Text style={styles.vendaPreco}>R$ {venda.preco.toFixed(2)}</Text>
+                    <View style={[
+                      styles.statusBadge,
+                      venda.status === 'OK' ? styles.statusPago : styles.statusPendente
+                    ]}>
+                      <Text style={[
+                        styles.statusText,
+                        venda.status === 'OK' ? styles.statusTextPago : styles.statusTextPendente
+                      ]}>
+                        {venda.status === 'OK' ? 'Pago' : 'Pendente'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f9fafb',
+  },
+  content: {
+    padding: 16,
+  },
+  loading: {
+    marginTop: 50,
+  },
+  header: {
+    marginBottom: 24,
+    paddingTop: 8,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  headerDate: {
+    fontSize: 14,
+    color: '#6b7280',
+    textTransform: 'capitalize',
+  },
+  kpiContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  kpiCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    padding: 16,
+  },
+  kpiIconContainer: {
+    width: 40,
+    height: 40,
+    backgroundColor: '#dbeafe',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  kpiIcon: {
+    fontSize: 20,
+  },
+  kpiLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  kpiValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  kpiSubtext: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  metaCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    padding: 20,
+    marginBottom: 16,
+  },
+  metaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  metaTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  metaPercentage: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2563eb',
+  },
+  progressContainer: {
+    height: 12,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#2563eb',
+    borderRadius: 6,
+  },
+  metaFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  metaText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  actionsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  primaryButton: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButtonText: {
+    color: '#2563eb',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  vendasSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    padding: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  badge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#2563eb',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  emptyText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    color: '#9ca3af',
+  },
+  vendasList: {
+    gap: 12,
+  },
+  vendaItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  vendaInfo: {
+    flex: 1,
+  },
+  vendaCliente: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  vendaData: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  vendaValores: {
+    alignItems: 'flex-end',
+  },
+  vendaPreco: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusPago: {
+    backgroundColor: '#dbeafe',
+  },
+  statusPendente: {
+    backgroundColor: '#e5e7eb',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  statusTextPago: {
+    color: '#2563eb',
+  },
+  statusTextPendente: {
+    color: '#6b7280',
+  },
+});

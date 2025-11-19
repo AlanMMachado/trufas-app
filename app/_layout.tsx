@@ -1,5 +1,5 @@
 import { AppProvider } from '@/contexts/AppContext';
-import { initDatabase } from '@/database/dbWeb';
+import { initDatabase } from '@/database/db';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -27,10 +27,9 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen name="vendas/nova" options={{ title: 'Nova Venda' }} />
-            <Stack.Screen name="remessas/nova" options={{ title: 'Nova Remessa' }} />
-            <Stack.Screen name="remessas/[id]" options={{ title: 'Detalhes da Remessa' }} />
+            <Stack.Screen name="vendas/NovaVendaScreen" options={{ headerShown: false }} />
+            <Stack.Screen name="remessas/NovaRemessaScreen" options={{ headerShown: false }} />
+            <Stack.Screen name="remessas/[id]" options={{ headerShown: false }} />
           </Stack>
           <StatusBar style="auto" />
         </ThemeProvider>

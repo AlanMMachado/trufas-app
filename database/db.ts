@@ -32,6 +32,7 @@ export function initDatabase() {
             preco REAL NOT NULL,
             data TEXT NOT NULL,
             status TEXT NOT NULL CHECK(status IN ('OK','PENDENTE')),
+            metodo_pagamento TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(produto_id) REFERENCES produtos(id) ON DELETE CASCADE
         );

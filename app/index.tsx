@@ -8,7 +8,7 @@ export default function Index(){
   useEffect(() => {
     // Aguarda o Root Layout estar pronto antes de navegar
     const timeout = setTimeout(() => {
-      router.replace("/(tabs)/dashboard");
+      router.replace("/(tabs)/DashboardScreen");
     }, 100);
 
     return () => clearTimeout(timeout);

@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
-import { Card, Text, Button, ActivityIndicator, FAB } from 'react-native-paper';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { RemessaService } from '@/service/remessaService';
 import { VendaService } from '@/service/vendaService';
 import { Remessa } from '@/types/Remessa';
 import { Venda } from '@/types/Venda';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text } from 'react-native-paper';
 
 export default function DetalhesRemessaScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,7 +29,6 @@ export default function DetalhesRemessaScreen() {
       setRemessa(remessaData);
       
       if (remessaData?.produtos) {
-        // Carregar vendas dos produtos desta remessa
         const todasVendas: Venda[] = [];
         for (const produto of remessaData.produtos) {
           const vendasProduto = await VendaService.getByProduto(produto.id);
@@ -47,7 +46,7 @@ export default function DetalhesRemessaScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator size="large" style={styles.loading} />
+        <ActivityIndicator size="large" color="#2563eb" style={styles.loading} />
       </View>
     );
   }
@@ -55,7 +54,9 @@ export default function DetalhesRemessaScreen() {
   if (!remessa) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>Remessa não encontrada</Text>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Remessa não encontrada</Text>
+        </View>
       </View>
     );
   }
@@ -76,106 +77,171 @@ export default function DetalhesRemessaScreen() {
       .reduce((total, venda) => total + venda.preco, 0);
   };
 
+  const getValorPendente = () => {
+    return vendas
+      .filter(venda => venda.status === 'PENDENTE')
+      .reduce((total, venda) => total + venda.preco, 0);
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.content}>
-        {/* Informações da Remessa */}
-        <Card style={styles.infoCard}>
-          <Card.Title 
-            title={`Remessa - ${format(parseISO(remessa.data), 'dd/MM/yyyy', { locale: ptBR })}`}
-            subtitle={remessa.observacao}
-          />
-          <Card.Content>
-            <View style={styles.resumoContainer}>
-              <View style={styles.resumoItem}>
-                <Text style={styles.resumoLabel}>Total Inicial:</Text>
-                <Text style={styles.resumoValor}>{getTotalInicial()} unidades</Text>
-              </View>
-              <View style={styles.resumoItem}>
-                <Text style={styles.resumoLabel}>Total Vendido:</Text>
-                <Text style={styles.resumoValor}>{getTotalVendido()} unidades</Text>
-              </View>
-              <View style={styles.resumoItem}>
-                <Text style={styles.resumoLabel}>Disponível:</Text>
-                <Text style={styles.resumoValor}>{getTotalInicial() - getTotalVendido()} unidades</Text>
-              </View>
-              <View style={styles.resumoItem}>
-                <Text style={styles.resumoLabel}>Valor Total:</Text>
-                <Text style={[styles.resumoValor, styles.valorDestaque]}>
-                  R$ {getValorTotalVendido().toFixed(2)}
-                </Text>
-              </View>
-            </View>
-          </Card.Content>
-        </Card>
+        {/* Header */}
+        <View style={styles.headerCard}>
+          <Text style={styles.headerIcon}>📦</Text>
+          <Text style={styles.headerTitle}>
+            {format(parseISO(remessa.data), "dd 'de' MMMM, yyyy", { locale: ptBR })}
+          </Text>
+          {remessa.observacao && (
+            <Text style={styles.headerObservacao}>{remessa.observacao}</Text>
+          )}
+        </View>
+
+        {/* KPIs */}
+        <View style={styles.kpisGrid}>
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Total Inicial</Text>
+            <Text style={styles.kpiValue}>{getTotalInicial()}</Text>
+            <Text style={styles.kpiSubtext}>unidades</Text>
+          </View>
+
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Vendido</Text>
+            <Text style={styles.kpiValue}>{getTotalVendido()}</Text>
+            <Text style={styles.kpiSubtext}>unidades</Text>
+          </View>
+
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Disponível</Text>
+            <Text style={styles.kpiValue}>{getTotalInicial() - getTotalVendido()}</Text>
+            <Text style={styles.kpiSubtext}>unidades</Text>
+          </View>
+
+          <View style={styles.kpiCard}>
+            <Text style={styles.kpiLabel}>Faturamento</Text>
+            <Text style={styles.kpiValue}>R$ {getValorTotalVendido().toFixed(0)}</Text>
+            <Text style={styles.kpiSubtext}>recebido</Text>
+          </View>
+        </View>
 
         {/* Produtos */}
-        <Card style={styles.produtosCard}>
-          <Card.Title title="Produtos" />
-          <Card.Content>
-            {remessa.produtos?.map((produto) => (
-              <View key={produto.id} style={styles.produtoItem}>
-                <View style={styles.produtoInfo}>
-                  <Text style={styles.produtoNome}>
-                    {produto.tipo} - {produto.sabor}
-                  </Text>
-                  <Text style={styles.produtoDetalhes}>
-                    Custo: R$ {produto.custo_producao.toFixed(2)} | 
-                    Disponível: {produto.quantidade_inicial - produto.quantidade_vendida}
-                  </Text>
-                </View>
-                <View style={styles.produtoVendas}>
-                  <Text style={styles.vendidosText}>
+        <View style={styles.produtosSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Produtos</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{remessa.produtos?.length || 0}</Text>
+            </View>
+          </View>
+
+          {remessa.produtos?.map((produto) => (
+            <View key={produto.id} style={styles.produtoItem}>
+              <View style={styles.produtoHeader}>
+                <Text style={styles.produtoNome}>
+                  {produto.tipo} - {produto.sabor}
+                </Text>
+                <Text style={styles.produtoCusto}>
+                  Custo: R$ {produto.custo_producao.toFixed(2)}
+                </Text>
+              </View>
+
+              <View style={styles.produtoProgress}>
+                <View style={styles.progressInfo}>
+                  <Text style={styles.progressText}>
                     {produto.quantidade_vendida}/{produto.quantidade_inicial}
                   </Text>
-                  <Text style={styles.percentualText}>
+                  <Text style={styles.progressPercentage}>
                     {((produto.quantidade_vendida / produto.quantidade_inicial) * 100).toFixed(0)}%
                   </Text>
                 </View>
+                <View style={styles.progressContainer}>
+                  <View 
+                    style={[
+                      styles.progressFill,
+                      { width: `${(produto.quantidade_vendida / produto.quantidade_inicial) * 100}%` }
+                    ]}
+                  />
+                </View>
               </View>
-            ))}
-          </Card.Content>
-        </Card>
+
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>
+                  {produto.quantidade_inicial === produto.quantidade_vendida
+                    ? 'Esgotado'
+                    : produto.quantidade_vendida === 0
+                      ? 'Novo'
+                      : `${produto.quantidade_inicial - produto.quantidade_vendida} disponíveis`
+                  }
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
 
         {/* Vendas */}
         {vendas.length > 0 && (
-          <Card style={styles.vendasCard}>
-            <Card.Title title={`Vendas (${vendas.length})`} />
-            <Card.Content>
-              {vendas.slice(0, 10).map((venda) => (
-                <View key={venda.id} style={styles.vendaItem}>
-                  <View style={styles.vendaInfo}>
-                    <Text style={styles.vendaCliente}>{venda.cliente}</Text>
-                    <Text style={styles.vendaData}>
-                      {format(parseISO(venda.data), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                    </Text>
-                  </View>
-                  <View style={styles.vendaValores}>
-                    <Text style={styles.vendaPreco}>R$ {venda.preco.toFixed(2)}</Text>
+          <View style={styles.vendasSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Vendas</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{vendas.length}</Text>
+              </View>
+            </View>
+
+            {/* Resumo Financeiro */}
+            <View style={styles.vendasResumo}>
+              <View style={styles.resumoItem}>
+                <Text style={styles.resumoLabel}>Recebido</Text>
+                <Text style={styles.resumoValor}>R$ {getValorTotalVendido().toFixed(2)}</Text>
+              </View>
+              {getValorPendente() > 0 && (
+                <View style={styles.resumoItem}>
+                  <Text style={styles.resumoLabel}>Pendente</Text>
+                  <Text style={styles.resumoValor}>R$ {getValorPendente().toFixed(2)}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Lista de Vendas */}
+            {vendas.slice(0, 10).map((venda) => (
+              <View key={venda.id} style={styles.vendaItem}>
+                <View style={styles.vendaInfo}>
+                  <Text style={styles.vendaCliente}>{venda.cliente}</Text>
+                  <Text style={styles.vendaData}>
+                    {format(parseISO(venda.data), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                  </Text>
+                </View>
+                <View style={styles.vendaValores}>
+                  <Text style={styles.vendaPreco}>R$ {venda.preco.toFixed(2)}</Text>
+                  <View style={[
+                    styles.vendaStatus,
+                    venda.status === 'OK' ? styles.statusPago : styles.statusPendente
+                  ]}>
                     <Text style={[
-                      styles.vendaStatus,
-                      venda.status === 'OK' ? styles.statusOK : styles.statusPendente
+                      styles.vendaStatusText,
+                      venda.status === 'OK' ? styles.statusTextPago : styles.statusTextPendente
                     ]}>
-                      {venda.status}
+                      {venda.status === 'OK' ? 'Pago' : 'Pendente'}
                     </Text>
                   </View>
                 </View>
-              ))}
-              {vendas.length > 10 && (
-                <Text style={styles.maisVendasText}>
-                  ... e mais {vendas.length - 10} vendas
-                </Text>
-              )}
-            </Card.Content>
-          </Card>
+              </View>
+            ))}
+            {vendas.length > 10 && (
+              <Text style={styles.maisVendas}>
+                ... e mais {vendas.length - 10} vendas
+              </Text>
+            )}
+          </View>
         )}
+
+        {/* Botão Nova Venda */}
+        <TouchableOpacity 
+          style={styles.novaVendaButton}
+          onPress={() => router.push('/vendas/NovaVendaScreen')}
+        >
+          <Text style={styles.novaVendaText}>+ Registrar Nova Venda</Text>
+        </TouchableOpacity>
       </View>
-      
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        onPress={() => router.push('/vendas/nova')}
-      />
     </ScrollView>
   );
 }
@@ -183,7 +249,7 @@ export default function DetalhesRemessaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f9fafb',
   },
   content: {
     padding: 16,
@@ -191,117 +257,266 @@ const styles = StyleSheet.create({
   loading: {
     marginTop: 50,
   },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
   errorText: {
-    textAlign: 'center',
-    marginTop: 50,
-    color: '#F44336',
+    fontSize: 16,
+    color: '#6b7280',
   },
-  infoCard: {
+  headerCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    padding: 24,
     marginBottom: 16,
+    alignItems: 'center',
   },
-  resumoContainer: {
-    marginTop: 8,
+  headerIcon: {
+    fontSize: 48,
+    marginBottom: 12,
   },
-  resumoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    textAlign: 'center',
     marginBottom: 8,
   },
-  resumoLabel: {
+  headerObservacao: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  kpisGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  kpiCard: {
+    width: '48%',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    padding: 16,
+  },
+  kpiLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  kpiValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  kpiSubtext: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  produtosSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    padding: 20,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
     fontSize: 16,
-    color: '#666',
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  badge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#2563eb',
+  },
+  produtoItem: {
+    padding: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 12,
+  },
+  produtoHeader: {
+    marginBottom: 12,
+  },
+  produtoNome: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  produtoCusto: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  produtoProgress: {
+    marginBottom: 12,
+  },
+  progressInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  progressText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  progressPercentage: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  progressContainer: {
+    height: 8,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#2563eb',
+    borderRadius: 4,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#2563eb',
+  },
+  vendasSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    padding: 20,
+    marginBottom: 16,
+  },
+  vendasResumo: {
+    flexDirection: 'row',
+    gap: 20,
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  resumoItem: {
+    flex: 1,
+  },
+  resumoLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   resumoValor: {
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  valorDestaque: {
-    color: '#4CAF50',
-    fontSize: 18,
-  },
-  produtosCard: {
-    marginBottom: 16,
-  },
-  produtoItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  produtoInfo: {
-    flex: 1,
-  },
-  produtoNome: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  produtoDetalhes: {
-    fontSize: 14,
-    color: '#666',
-  },
-  produtoVendas: {
-    alignItems: 'flex-end',
-  },
-  vendidosText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  percentualText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  vendasCard: {
-    marginBottom: 16,
+    color: '#111827',
   },
   vendaItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 8,
   },
   vendaInfo: {
     flex: 1,
   },
   vendaCliente: {
-    fontWeight: 'bold',
     fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
   },
   vendaData: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 11,
+    color: '#6b7280',
   },
   vendaValores: {
     alignItems: 'flex-end',
   },
   vendaPreco: {
-    fontWeight: 'bold',
     fontSize: 14,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
   },
   vendaStatus: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  statusOK: {
-    color: '#4CAF50',
+  statusPago: {
+    backgroundColor: '#dbeafe',
   },
   statusPendente: {
-    color: '#F44336',
+    backgroundColor: '#e5e7eb',
   },
-  maisVendasText: {
+  vendaStatusText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  statusTextPago: {
+    color: '#2563eb',
+  },
+  statusTextPendente: {
+    color: '#6b7280',
+  },
+  maisVendas: {
     textAlign: 'center',
-    color: '#666',
+    color: '#9ca3af',
+    fontSize: 12,
     marginTop: 8,
     fontStyle: 'italic',
   },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
+  novaVendaButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  novaVendaText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: 'bold',
   },
 });
