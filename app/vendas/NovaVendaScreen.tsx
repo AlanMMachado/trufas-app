@@ -98,7 +98,7 @@ export default function NovaVendaScreen() {
           <Text style={styles.emptySubtext}>Crie uma remessa com produtos primeiro</Text>
           <TouchableOpacity 
             style={styles.emptyButton}
-            onPress={() => router.push('/remessas/nova')}
+            onPress={() => router.push('/remessas/NovaRemessaScreen')}
           >
             <Text style={styles.emptyButtonText}>+ Criar Remessa</Text>
           </TouchableOpacity>
