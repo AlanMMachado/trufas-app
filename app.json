@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "vendas-app",
-    "slug": "vendas-app",
+    "slug": "trufas-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "vendasapp",
@@ -23,15 +23,6 @@
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
-        }
-      ],
       "expo-sqlite"
     ],
     "experiments": {
